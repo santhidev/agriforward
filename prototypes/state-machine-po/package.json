@@ -1,0 +1,12 @@
+{
+  "name": "prototype-state-machine-po",
+  "version": "1.0.0",
+  "description": "PROTOTYPE — throwaway interactive terminal app for PO state machine sanity check",
+  "scripts": {
+    "start": "npx tsx prototype-state-machine-po.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

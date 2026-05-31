@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="th">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>PROTOTYPE: Seller Submit Offer — AgriForward</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            /* PROTOTYPE: minimal custom styles only where Tailwind utilities are awkward */
+            .wizard-step {
+                display: none;
+            }
+            .wizard-step.active {
+                display: block;
+                animation: fadeIn 0.2s ease-in-out;
+            }
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(8px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            .debug-panel {
+                font-family:
+                    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                    monospace;
+            }
+        </style>
+    </head>
+    <body class="bg-gray-50 text-gray-900 min-h-screen pb-24">
+        <!-- PROTOTYPE HEADER -->
+        <div
+            class="bg-yellow-300 text-yellow-900 text-center text-xs font-bold py-1 uppercase tracking-wider"
+        >
+            PROTOTYPE — Throwaway code. Switch variants with the bar below.
+        </div>
+
+        <!-- APP SHELL -->
+        <div id="app" class="max-w-6xl mx-auto p-4"></div>
+
+        <!-- FLOATING SWITCHER -->
+        <div
+            id="switcher"
+            class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white rounded-full shadow-lg px-4 py-2 flex items-center gap-3 select-none"
+        >
+            <button
+                id="prevVariant"
+                class="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-sm"
+                aria-label="Previous variant"
+            >
+                ←
+            </button>
+            <div class="text-sm font-medium whitespace-nowrap">
+                <span id="variantLabel">—</span>
+            </div>
+            <button
+                id="nextVariant"
+                class="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-sm"
+                aria-label="Next variant"
+            >
+                →
+            </button>
+        </div>
+
+        <!-- DEBUG PANEL -->
+        <div class="fixed top-14 right-4 z-40 w-80 max-w-[90vw]">
+            <div
+                class="bg-gray-900 text-green-400 text-xs rounded-lg shadow-xl p-3 debug-panel border border-gray-700"
+            >
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold text-gray-300">STATE DUMP</span>
+                    <button
+                        id="toggleDebug"
+                        class="text-gray-500 hover:text-gray-300"
+                    >
+                        hide
+                    </button>
+                </div>
+                <pre id="stateDump" class="whitespace-pre-wrap break-all"></pre>
+            </div>
+        </div>
+
+        <script>
+            // ===========================
+            // PROTOTYPE: SELLER SUBMIT OFFER
+            // ===========================
+
+            // ---- Mock PO Data (the order the seller is responding to) ----
+            const PO = {
+                id: "PO-2024-0892",
+                product: "มะเขือเทศ",
+                category: "ผัก",
+                quantity: 500,
+                unit: "กิโลกรัม",
+                targetPrice: 25, // THB per unit
+                deliveryOption: "self_pickup", // or 'platform_logistics'
+                shippingFee: 0,
+                buyerName: "ร้านผักสดทดสอบ",
+                postedAt: "2024-06-01T09:00:00Z",
+            };
+
+            // ---- State ----
+            let state = {
+                screen: "seller-offer",
+                step: 0,
+                offerPrice: "",
+                notes: "",
+                totalPrice: 0,
+                deposit: 0,
+                confirmedDeposit: false,
+            };
+
+            // ---- Variant Control ----
+            const VARIANTS = [
+                { key: "minimal", label: "Minimal / Wizard" },
+                { key: "dense", label: "Dense / Dashboard" },
+                { key: "card", label: "Card / Conversational" },
+            ];
+
+            function getCurrentVariant() {
+                const params = new URLSearchParams(window.location.search);
+                const v = params.get("v");
+                return VARIANTS.find((x) => x.key === v) ? v : "minimal";
+            }
+
+            function setVariant(key) {
+                const url = new URL(window.location.href);
+                url.searchParams.set("v", key);
+                window.history.replaceState({}, "", url);
+                render();
+            }
+
+            function cycleVariant(dir) {
+                const keys = VARIANTS.map((v) => v.key);
+                const idx = keys.indexOf(getCurrentVariant());
+                const next = keys[(idx + dir + keys.length) % keys.length];
+                setVariant(next);
+            }
+
+            // ---- State Actions ----
+            function setOfferPrice(val) {
+                state.offerPrice = val;
+                recalc();
+                render();
+            }
+            function setNotes(val) {
+                state.notes = val;
+                render();
+            }
+            function nextStep() {
+                state.step = Math.min(state.step + 1, 3);
+                render();
+            }
+            function recalc() {
+                const price = parseFloat(state.offerPrice) || 0;
+                const qty = PO.quantity || 0;
+                state.totalPrice = Math.round(price * qty);
+                const rawDeposit = state.totalPrice * 0.05;
+                state.deposit = Math.min(Math.round(rawDeposit), 1000);
+            }
+
+            // ---- Utility ----
+            function fmtNum(n) {
+                if (n === "" || n === null || n === undefined) return "-";
+                const num = Number(n);
+                return isNaN(num) ? String(n) : num.toLocaleString("th-TH");
+            }
+
+            function renderSwitcher() {
+                const v = getCurrentVariant();
+                const info = VARIANTS.find((x) => x.key === v);
+                document.getElementById("variantLabel").textContent =
+                    `${v} — ${info.label}`;
+            }
+
+            function renderDebug() {
+                const payload = {
+                    ...state,
+                    po: PO,
+                    timestamp: new Date().toISOString(),
+                };
+                document.getElementById("stateDump").textContent =
+                    JSON.stringify(payload, null, 2);
+            }
+
+            // ---- Variants ----
+
+            // 1. Minimal / Wizard
+            function renderMinimal() {
+                const steps = [
+                    {
+                        id: "po",
+                        title: "รายละเอียดคำสั่งซื้อ",
+                        subtitle: "ตรวจสอบ PO ที่คุณจะเสนอราคา",
+                    },
+                    {
+                        id: "price",
+                        title: "เสนอราคา",
+                        subtitle: "ระบุราคาต่อหน่วยที่คุณพร้อมขาย",
+                    },
+                    {
+                        id: "deposit",
+                        title: "วางมัดจำ",
+                        subtitle: "ยืนยัน offer ด้วยเงินมัดจำ",
+                    },
+                    {
+                        id: "review",
+                        title: "ตรวจสอบ offer",
+                        subtitle: "ตรวจสอบก่อนส่ง",
+                    },
+                ];
+
+                let active = state.step;
+
+                const stepDots = steps
+                    .map(
+                        (s, i) =>
+                            `<div class="h-2 w-2 rounded-full ${i === active ? "bg-green-600" : i < active ? "bg-green-300" : "bg-gray-300"}"></div>`,
+                    )
+                    .join("");
+
+                function stepContent(idx) {
+                    if (idx === 0) {
+                        return `<div class="mt-6 bg-white rounded-xl border border-gray-200 p-5">
+          <div class="text-xs text-gray-500 uppercase font-bold">PO ${PO.id}</div>
+          <div class="mt-3 space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-gray-500">สินค้า</span><span class="font-semibold">${PO.product}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">จำนวน</span><span class="font-semibold">${fmtNum(PO.quantity)} ${PO.unit}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">ราคาเป้าหมาย</span><span class="font-semibold">${fmtNum(PO.targetPrice)} บาท/${PO.unit}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">วิธีส่ง</span><span class="font-semibold">${PO.deliveryOption === "self_pickup" ? "มารับที่ Hub (ฟรี)" : "ส่งถึงบ้าน"}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">ผู้ซื้อ</span><span class="font-semibold">${PO.buyerName}</span></div>
+          </div>
+          <div class="mt-4"><button onclick="nextStep()" class="px-5 py-2 bg-green-600 text-white rounded-lg font-semibold text-sm">ถัดไป</button></div>
+        </div>`;
+                    }
+                    if (idx === 1) {
+                        return `<div class="mt-6">
+          <div class="text-sm text-gray-500 mb-2">ราคาเสนอขาย (บาท/${PO.unit})</div>
+          <input type="number" value="${state.offerPrice}" oninput="setOfferPrice(this.value)" placeholder="เช่น ${PO.targetPrice}" class="w-full px-4 py-4 rounded-xl border-2 border-gray-200 text-lg focus:border-green-500 outline-none" />
+          <div class="mt-4 text-sm text-gray-500">
+            ราคาเป้าหมายของผู้ซื้อ: <span class="font-semibold">${fmtNum(PO.targetPrice)} บาท/${PO.unit}</span>
+          </div>
+          <div class="mt-4">
+            <button onclick="nextStep()" class="px-5 py-2 bg-green-600 text-white rounded-lg font-semibold text-sm">ถัดไป</button>
+          </div>
+        </div>`;
+                    }
+                    if (idx === 2) {
+                        return `<div class="mt-6 space-y-4">
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="text-sm text-gray-500">ยอดขายรวม</div>
+            <div class="text-2xl font-bold">${fmtNum(state.totalPrice)} บาท</div>
+          </div>
+
+          <div class="bg-orange-50 border border-orange-200 rounded-xl p-5">
+            <div class="text-sm text-orange-800">คุณต้องวางมัดจำ 5% (สูงสุด 1,000 บาท) เพื่อยืนยัน offer นี้</div>
+            <div class="mt-2 text-3xl font-bold text-orange-700">${fmtNum(state.deposit)} บาท</div>
+          </div>
+
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800">
+            ⚠️ หากคุณยกเลิกหลังจากทำสัญญาแล้ว มัดจำจะถูกริบโดยแพลตฟอร์ม
+          </div>
+
+          <div class="flex gap-2">
+            <button onclick="nextStep()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-semibold">ยอมรับและวางมัดจำ</button>
+          </div>
+        </div>`;
+                    }
+                    if (idx === 3) {
+                        return `<div class="mt-6 space-y-3">
+          <div class="bg-white rounded-xl border border-gray-200 p-5 text-sm space-y-2">
+            <div class="flex justify-between"><span class="text-gray-500">สินค้า</span><span class="font-semibold">${PO.product}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">จำนวน</span><span class="font-semibold">${fmtNum(PO.quantity)} ${PO.unit}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">ราคาเสนอขาย</span><span class="font-semibold">${fmtNum(state.offerPrice)} บาท/${PO.unit}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">ยอดขายรวม</span><span class="font-semibold">${fmtNum(state.totalPrice)} บาท</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">มัดจำ</span><span class="font-semibold text-orange-700">${fmtNum(state.deposit)} บาท</span></div>
+          </div>
+          <button class="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg">ส่ง Offer</button>
+        </div>`;
+                    }
+                    return "";
+                }
+
+                return `
+      <div class="max-w-md mx-auto pt-10">
+        <div class="flex items-center justify-between mb-8">
+          <h1 class="text-2xl font-bold">ส่ง Offer</h1>
+          <a href="index.html?v=${getCurrentVariant()}" class="text-sm text-green-700 underline">← ไปหน้าผู้ซื้อ</a>
+        </div>
+        <div class="flex gap-2 mb-6">${stepDots}</div>
+        <div>
+          <div class="text-sm font-bold text-green-700 uppercase tracking-wide">ขั้นตอน ${active + 1} / ${steps.length}</div>
+          <h2 class="text-xl font-bold mt-1">${steps[active].title}</h2>
+          <p class="text-gray-500">${steps[active].subtitle}</p>
+          <div class="wizard-step active">${stepContent(active)}</div>
+        </div>
+      </div>
+    `;
+            }
+
+            // 2. Dense / Dashboard
+            function renderDense() {
+                return `
+      <div class="pt-4">
+        <div class="flex items-center justify-between mb-4">
+          <h1 class="text-xl font-bold">ส่ง Offer — ${PO.id}</h1>
+          <a href="index.html?v=${getCurrentVariant()}" class="text-sm text-green-700 underline">← ไปหน้าผู้ซื้อ</a>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- PO Summary -->
+          <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div class="bg-gray-100 px-4 py-2 text-xs font-bold text-gray-600 uppercase">รายละเอียด PO</div>
+            <table class="w-full text-sm">
+              <tbody class="divide-y divide-gray-100">
+                <tr><td class="px-4 py-2 text-gray-500">สินค้า</td><td class="px-4 py-2 font-semibold">${PO.product}</td></tr>
+                <tr><td class="px-4 py-2 text-gray-500">จำนวน</td><td class="px-4 py-2 font-semibold">${fmtNum(PO.quantity)} ${PO.unit}</td></tr>
+                <tr><td class="px-4 py-2 text-gray-500">ราคาเป้าหมาย</td><td class="px-4 py-2 font-semibold">${fmtNum(PO.targetPrice)} บาท/${PO.unit}</td></tr>
+                <tr><td class="px-4 py-2 text-gray-500">วิธีส่ง</td><td class="px-4 py-2 font-semibold">${PO.deliveryOption === "self_pickup" ? "มารับที่ Hub" : "ส่งถึงบ้าน"}</td></tr>
+                <tr><td class="px-4 py-2 text-gray-500">ผู้ซื้อ</td><td class="px-4 py-2 font-semibold">${PO.buyerName}</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Offer Form -->
+          <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div class="bg-gray-100 px-4 py-2 text-xs font-bold text-gray-600 uppercase">ฟอร์มเสนอราคา</div>
+            <div class="p-4 space-y-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">ราคาเสนอขาย (บาท/${PO.unit})</label>
+                <input type="number" value="${state.offerPrice}" oninput="setOfferPrice(this.value)" class="border border-gray-300 rounded px-2 py-1 text-sm w-full" placeholder="เช่น ${PO.targetPrice}" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">ยอดขายรวม</label>
+                <div class="text-lg font-bold">${fmtNum(state.totalPrice)} บาท</div>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">หมายเหตุ</label>
+                <textarea oninput="setNotes(this.value)" class="border border-gray-300 rounded px-2 py-1 text-sm w-full" rows="2">${state.notes}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deposit Section -->
+        <div class="mt-4 bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div class="text-sm font-bold text-orange-900">มัดจำเพื่อยืนยัน Offer</div>
+              <div class="text-xs text-orange-800 mt-1">คุณต้องวางมัดจำ 5% (สูงสุด 1,000 บาท) เพื่อยืนยัน offer นี้</div>
+            </div>
+            <div class="text-2xl font-bold text-orange-700">${fmtNum(state.deposit)} บาท</div>
+          </div>
+        </div>
+
+        <div class="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+          ⚠️ หากคุณยกเลิกหลังจากทำสัญญาแล้ว มัดจำจะถูกริบโดยแพลตฟอร์ม
+        </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button class="px-4 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">บันทึกร่าง</button>
+          <button class="px-6 py-2 bg-green-600 text-white rounded font-semibold text-sm hover:bg-green-700">ส่ง Offer พร้อมวางมัดจำ</button>
+        </div>
+      </div>
+    `;
+            }
+
+            // 3. Card / Conversational
+            function renderCard() {
+                return `
+      <div class="max-w-lg mx-auto pt-6">
+        <div class="flex items-center justify-between mb-6">
+          <h1 class="text-lg font-bold text-gray-800">ส่ง Offer</h1>
+          <a href="index.html?v=${getCurrentVariant()}" class="text-sm text-green-700 underline">← ไปหน้าผู้ซื้อ</a>
+        </div>
+
+        <div class="space-y-4">
+          <!-- PO Card -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">PO</div>
+              <div>
+                <div class="text-sm font-bold">${PO.product}</div>
+                <div class="text-xs text-gray-500">${fmtNum(PO.quantity)} ${PO.unit} · ราคาเป้าหมาย ${fmtNum(PO.targetPrice)} บาท/${PO.unit}</div>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span class="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">${PO.deliveryOption === "self_pickup" ? "📦 มารับที่ Hub" : "🚚 ส่งถึงบ้าน"}</span>
+              <span class="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">ผู้ซื้อ: ${PO.buyerName}</span>
+            </div>
+          </div>
+
+          <!-- Chat -->
+          <div class="flex gap-3">
+            <div class="w-8 h-8 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold shrink-0">AF</div>
+            <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm max-w-[80%]">
+              <p class="text-sm">สนใจ PO นี้ไหมครับ? ลองเสนอราคาดูเลย 👇</p>
+            </div>
+          </div>
+
+          <div class="flex gap-3 justify-end">
+            <div class="bg-green-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[80%]">
+              <p class="text-sm">สนใจครับ! เสนอราคาเท่าไหร่ดี?</p>
+            </div>
+          </div>
+
+          <!-- Price Input Card -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+            <label class="block text-sm text-gray-500 mb-2">ราคาเสนอขาย (บาท/${PO.unit})</label>
+            <input type="number" value="${state.offerPrice}" oninput="setOfferPrice(this.value)" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-lg font-semibold focus:ring-2 focus:ring-green-500 outline-none" placeholder="เช่น ${PO.targetPrice}" />
+            <div class="mt-2 text-xs text-gray-500">ราคาเป้าหมายผู้ซื้อ: ${fmtNum(PO.targetPrice)} บาท/${PO.unit}</div>
+          </div>
+
+          <!-- Summary Card -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+            <div class="flex justify-between items-center">
+              <span class="text-sm text-gray-500">ยอดขายรวม</span>
+              <span class="text-xl font-bold">${fmtNum(state.totalPrice)} บาท</span>
+            </div>
+          </div>
+
+          <!-- Deposit Card -->
+          <div class="bg-orange-50 rounded-2xl border border-orange-200 p-4 shadow-sm">
+            <div class="flex items-start gap-3">
+              <div class="text-2xl">🔒</div>
+              <div class="flex-1">
+                <div class="text-sm font-bold text-orange-900">มัดจำยืนยัน Offer</div>
+                <div class="text-xs text-orange-800 mt-1">คุณต้องวางมัดจำ 5% (สูงสุด 1,000 บาท) เพื่อยืนยัน offer นี้</div>
+                <div class="mt-2 text-2xl font-bold text-orange-700">${fmtNum(state.deposit)} บาท</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Warning Card -->
+          <div class="bg-red-50 rounded-2xl border border-red-200 p-4 shadow-sm flex items-start gap-3">
+            <div class="text-lg">⚠️</div>
+            <div class="text-sm text-red-800">หากคุณยกเลิกหลังจากทำสัญญาแล้ว มัดจำจะถูกริบโดยแพลตฟอร์ม</div>
+          </div>
+
+          <!-- Notes -->
+          <div class="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+            <label class="block text-sm text-gray-500 mb-2">หมายเหตุ (ไม่บังคับ)</label>
+            <textarea oninput="setNotes(this.value)" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none" rows="2" placeholder="ระบุรายละเอียดเพิ่มเติม...">${state.notes}</textarea>
+          </div>
+
+          <!-- Submit -->
+          <div class="pt-2">
+            <button class="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-lg shadow-md">ส่ง Offer</button>
+          </div>
+        </div>
+      </div>
+    `;
+            }
+
+            // ---- Main Render ----
+            function render() {
+                const variant = getCurrentVariant();
+                const app = document.getElementById("app");
+                if (variant === "minimal") app.innerHTML = renderMinimal();
+                else if (variant === "dense") app.innerHTML = renderDense();
+                else if (variant === "card") app.innerHTML = renderCard();
+                else app.innerHTML = renderMinimal();
+                renderSwitcher();
+                renderDebug();
+            }
+
+            // ---- Event Wiring ----
+            document
+                .getElementById("prevVariant")
+                .addEventListener("click", () => cycleVariant(-1));
+            document
+                .getElementById("nextVariant")
+                .addEventListener("click", () => cycleVariant(1));
+
+            let debugVisible = true;
+            document
+                .getElementById("toggleDebug")
+                .addEventListener("click", () => {
+                    debugVisible = !debugVisible;
+                    document.getElementById(
+                        "stateDump",
+                    ).parentElement.style.display = debugVisible
+                        ? "block"
+                        : "none";
+                    document.getElementById("toggleDebug").textContent =
+                        debugVisible ? "hide" : "show";
+                });
+
+            document.addEventListener("keydown", (e) => {
+                const active = document.activeElement;
+                const isTyping =
+                    active &&
+                    (active.tagName === "INPUT" ||
+                        active.tagName === "TEXTAREA" ||
+                        active.isContentEditable);
+                if (isTyping) return;
+                if (e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    cycleVariant(-1);
+                }
+                if (e.key === "ArrowRight") {
+                    e.preventDefault();
+                    cycleVariant(1);
+                }
+            });
+
+            // Initialize with demo data
+            setOfferPrice("24");
+            state.step = 0;
+            render();
+        </script>
+    </body>
+</html>

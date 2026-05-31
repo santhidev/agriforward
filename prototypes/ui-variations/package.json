@@ -1,0 +1,9 @@
+{
+  "name": "agriforward-ui-prototype",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PROTOTYPE — Throwaway UI variations for AgriForward B2B marketplace",
+  "scripts": {
+    "dev": "npx serve . -l 3000"
+  }
+}
