@@ -1,0 +1,100 @@
+﻿@import "tailwindcss";
+
+/* ===== Design Tokens (AgriForward) ===== */
+:root {
+  --color-primary: #2f855a;
+  --color-primary-dark: #276749;
+  --color-primary-light: #c6f6d5;
+  --color-buyer: #2563eb;
+  --color-buyer-light: #dbeafe;
+  --color-seller: #16a34a;
+  --color-seller-light: #dcfce7;
+  --color-danger: #dc2626;
+  --color-danger-light: #fee2e2;
+  --color-danger-dark: #991b1b;
+  --color-warning: #d97706;
+  --color-warning-light: #fef3c7;
+  --color-success: #059669;
+  --color-success-light: #d1fae5;
+  --color-info: #2563eb;
+  --color-info-light: #dbeafe;
+  --color-star: #facc15;
+  --color-star-empty: #d1d5db;
+
+  --background: #f7fafc;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --foreground: #1a202c;
+  --foreground-muted: #a0aec0;
+  --muted: #718096;
+  --border: #e2e8f0;
+
+  --radius-sm: 0.375rem;
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+  --shadow: 0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.05);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--color-primary);
+  --color-primary-dark: var(--color-primary-dark);
+  --color-primary-light: var(--color-primary-light);
+  --color-buyer: var(--color-buyer);
+  --color-buyer-light: var(--color-buyer-light);
+  --color-seller: var(--color-seller);
+  --color-seller-light: var(--color-seller-light);
+  --color-danger: var(--color-danger);
+  --color-danger-light: var(--color-danger-light);
+  --color-danger-dark: var(--color-danger-dark);
+  --color-warning: var(--color-warning);
+  --color-warning-light: var(--color-warning-light);
+  --color-success: var(--color-success);
+  --color-success-light: var(--color-success-light);
+  --color-info: var(--color-info);
+  --color-info-light: var(--color-info-light);
+  --color-star: var(--color-star);
+  --color-star-empty: var(--color-star-empty);
+  --color-muted: var(--muted);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground-muted: var(--foreground-muted);
+  --font-sans: var(--font-sarabun);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sarabun), "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+.animate-slide-down { animation: slideDown 0.3s ease-out; }
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--border) 25%, var(--surface-muted) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9999px; }

@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  phone         String    @unique
+  email         String?   @unique
+  passwordHash  String?
+  displayName   String
+  farmName      String?
+  companyName   String?
+  address       String?
+  role          String   @default("BOTH")
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  buyerOrders    PurchaseOrder[] @relation("BuyerOrders")
+  offers         Offer[]
+  wallet         UserWallet?
+  ratingsGiven   Rating[] @relation("RatingsGiven")
+  ratingsReceived Rating[] @relation("RatingsReceived")
+  watchedProducts ProductWatch[]
+  comments       Comment[]
+}
+
+model UserWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  balance   Decimal  @default(0)
+  transactions WalletTransaction[]
+}
+
+model WalletTransaction {
+  id          String            @id @default(cuid())
+  walletId    String
+  wallet      UserWallet        @relation(fields: [walletId], references: [id])
+  amount      Decimal
+  type        String
+  offerId     String?
+  orderId     String?
+  createdAt   DateTime          @default(now())
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  products Product[]
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  name        String
+  unit        String
+  orders      PurchaseOrder[]
+  watchers    ProductWatch[]
+}
+
+model PurchaseOrder {
+  id                  String          @id @default(cuid())
+  buyerId             String
+  buyer               User            @relation("BuyerOrders", fields: [buyerId], references: [id])
+  productId           String
+  product             Product         @relation(fields: [productId], references: [id])
+  quantity            Decimal
+  targetPrice         Decimal?
+  deliveryOption      String  @default("SELF_PICKUP")
+  pickupAddress       String?
+  deliveryAddress     String?
+  shippingFee         Decimal?
+  shippingFeeFormula  String?
+  status              String  @default("Draft")
+  qcResult            String?
+  qcNotes             String?
+  disputeReason       String?
+  disputeImages       String[]
+  createdAt           DateTime        @default(now())
+  publishedAt         DateTime?
+  expiresAt           DateTime?
+  offers              Offer[]
+  comments            Comment[]
+}
+
+model Offer {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       PurchaseOrder @relation(fields: [orderId], references: [id])
+  sellerId    String
+  seller      User        @relation(fields: [sellerId], references: [id])
+  pricePerUnit Decimal
+  totalPrice  Decimal
+  depositAmount Decimal
+  depositPaid Boolean     @default(false)
+  status      String @default("Open")
+  notes       String?
+  createdAt   DateTime    @default(now())
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     PurchaseOrder @relation(fields: [orderId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model ProductWatch {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([productId])
+}
+
+model Rating {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  fromUserId  String
+  fromUser    User     @relation("RatingsGiven", fields: [fromUserId], references: [id])
+  toUserId    String
+  toUser      User     @relation("RatingsReceived", fields: [toUserId], references: [id])
+  score       Int
+  comment     String?
+  createdAt   DateTime @default(now())
+}
